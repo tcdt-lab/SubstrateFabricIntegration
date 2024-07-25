@@ -40,9 +40,10 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
-
+use pallet_randomness_collective_flip as randomness_collective_flip;
 /// Import the template pallet.
 pub use pallet_template;
+// pub use pallet_contracts;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -249,6 +250,40 @@ impl pallet_sudo::Config for Runtime {
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
+}
+
+
+impl pallet_contracts::Config for Runtime {
+    type Time = Timestamp;
+    type Randomness = Randomness<Config>;
+    type Currency = Balances;
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall: Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo> + GetDispatchInfo + Decode + IsType<<Self as Config>::RuntimeCall>;
+    type RuntimeHoldReason: From<HoldReason>;
+    type CallFilter: Contains<<Self as Config>::RuntimeCall>;
+    type WeightPrice: Convert<Weight, <<Self as Config>::Currency as Inspect<<Self as Config>::AccountId>>::Balance>;
+    type WeightInfo: WeightInfo;
+    type ChainExtension: ChainExtension<Self> + Default;
+    type Schedule: Get<Schedule<Self>>;
+    type CallStack: Array<Item = Frame<Self>>;
+    type DepositPerByte: Get<<<Self as Config>::Currency as Inspect<<Self as Config>::AccountId>>::Balance>;
+    type DefaultDepositLimit: Get<<<Self as Config>::Currency as Inspect<<Self as Config>::AccountId>>::Balance>;
+    type DepositPerItem: Get<<<Self as Config>::Currency as Inspect<<Self as Config>::AccountId>>::Balance>;
+    type CodeHashLockupDepositPercent: Get<Perbill>;
+    type AddressGenerator: AddressGenerator<Self>;
+    type MaxCodeLen: Get<u32>;
+    type MaxStorageKeyLen: Get<u32>;
+    type MaxTransientStorageSize: Get<u32>;
+    type MaxDelegateDependencies: Get<u32>;
+    type UnsafeUnstableInterface: Get<bool>;
+    type MaxDebugBufferLen: Get<u32>;
+    type UploadOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+    type InstantiateOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+    type Migrations: MigrateSequence;
+    type Debug: Debugger<Self>;
+    type Environment: Get<Environment<Self>>;
+    type ApiVersion: Get<ApiVersion>;
+    type Xcm: Controller<OriginFor<Self>, <Self as Config>::RuntimeCall, BlockNumberFor<Self>>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

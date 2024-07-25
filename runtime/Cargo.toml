@@ -23,7 +23,8 @@ scale-info = { version = "2.10.0", default-features = false, features = [
 	"derive",
 	"serde",
 ] }
-
+pallet-contracts ={ version = "37.0.0", default-features = false}
+pallet-randomness-collective-flip ={ version = "15.0.0", default-features = false}
 # frame
 frame-support = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.9.0", default-features = false, features = ["experimental"] }
 frame-system = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.9.0", default-features = false }
@@ -116,7 +117,8 @@ std = [
 	"sp-storage/std",
 	"sp-transaction-pool/std",
 	"sp-version/std",
-
+	"pallet-contracts/std",
+	"pallet-randomness-collective-flip/std",
 	"substrate-wasm-builder",
 ]
 
