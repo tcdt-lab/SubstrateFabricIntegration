@@ -1,121 +1,96 @@
-# substrate-contracts-node
+# Integrating Substrate Framework with Hyperledger Fabric for Enhanced Interoperability
+## Introduction
+### What Is a Blockchain Network?
+There are many definitions for the term 'blockchain' that aims to emphasize on the core features of this technology. For the sake of simplicity, we define blockchain in the following way:
+A blockchain is a distributed database (a.k.a a ledger) that stores a growing and immutable list of ordered records (a.k.a blocks). These blocks are linked using cryptographical algorithms. Each block contains a cryptographic hash of the previous block, a timestamp, and transaction data.
+The ledger is shared across multiple nodes (servers), and is responsible for maintaining individual operations on the network called 'transactions'. Some nodes participate in a decision-making process called 'consensus mechanism' to determine whether a given transaction is valid. Since there are no centralized authority supervising the system, there should be policies applied to the network that should be followed by all participants (users, nodes, etc.) to reach consensus. These policies are specified in something called 'smart contracts', which are self-executing pieces of code that enforce the terms of the contract between nodes.
+### What Are the Different Types of Blockchain Networks?
+Although there are different categorizations for blockchain networks, they are usually classified into two major types:
+1. Public Blockchains: Also known as permissionless blockchain, it is a type of blockchain where anyone can join the network either as a user or as a node. All nodes are allowed to validate transactions and all users can view the ledger.
+2. Private Blockchains: Also known as a permissioned blockchain, it is a type of blockchain where access to the network is restricted to only an authorized group of users. Every participating node should be identified by the organization that is operating the network.
+### What is Blockchain Interoperability
+Blockchain interoperability refers to the ability of different blockchain networks to communicate, share data, and interact with each other seamlessly. It aims to create a connected ecosystem where multiple blockchain platforms can work together, allowing for more efficient and versatile use of blockchain technology.
+## Problem Statement
+### What Problem Are We Trying to Solve?
+There are multiple solutions for establishing interoperability between two different blockchain networks, such as cross-chain communication, parachains, relay chains, atomic swaps, notary schemes, etc. However, none of these solutions directly address the challenges for connecting a public blockchain to a private blockchain. As mentioned earlier, accessing the data (or specifically the ledger) on a private blockchain is restricted to a group of users autheticated and authorized by the organization running the network. This introduces a challenge for any external entity attempting to communicate.
+In this work, we aim to provide a practical solution to connect a public and a private network to each other while retaining the key features of a blockchain network, especially decentralization.
+## Solution
+### Architecture
+The diagram below outlines the specifics of the solution of our architecture:
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/paritytech/substrate-contracts-node)
+![Sample Image](doc_images/Drawing.png)
 
-This repository contains Substrate's [`node-template`](https://github.com/paritytech/substrate/tree/master/bin/node-template)
-configured to include Substrate's [`pallet-contracts`](https://github.com/paritytech/substrate/tree/master/frame/contracts)
-‒ a smart contract module.
+There are two scenarios through which Alice and Bob can communicate with one another:
+1. Alice (representative of a Hyperledger Fabric user) wants to share data/transfer assets to Bob (representative of a Substrate user).
+2. Bob (representative of a Substrate user) wants to share data/transfer assets to Alice (representative of a Hyperledger Fabric user).
 
-_This repository contains a couple of modifications that make it unsuitable
-for a production deployment, but a great fit for development and testing:_
+The sequential diagram of the first scenario is illustrated as follows:
+1. Alice initiates a transaction on the Hyperledger Fabric network.
+2. The transaction request is received by ordering services.
+3. The ordering service invokes all endorsing peers, including the peers on the interoperability channel, to endorse the transaction.
+4. Chaincodes installed on the peers of the interoperability channel identify the transaction as an **external transaction** (a transaction with a destination outside of the network).
+5. Once the chaincodes are executed, they forward the transaction information to the relay nodes that are listening to the events of Hyperledger Fabric channel.
+6. The transaction information is sent through a broker that is reponsible for discovering reliable relay nodes that are up and running.
+7. The transaction information are then sent from the relay nodes to the substrate node.
+8. The nodes then reach a consensus to validate the transaction.
+9. Bob receives the corresponding asset and the transaction information is added to the ledger.
+9. Once the transaction is executed and submitted to the Substrate network, a message is sent through the relay services back to Fabric network to confirm the execution of the transaction.
+10. After confirmation, the asset sent by Alice is unlocked.
 
-* The unstable features of the [`pallet-contracts`](https://github.com/paritytech/substrate/tree/master/frame/contracts)
-  are enabled by default (see the [`runtime/Cargo.toml`](https://github.com/paritytech/substrate-contracts-node/blob/main/runtime/Cargo.toml)).
-* The consensus algorithm has been switched to `manual-seal` in
-  [#42](https://github.com/paritytech/substrate-contracts-node/pull/42).
-  Hereby blocks are authored immediately at every transaction, so there
-  is none of the typical six seconds block time associated with `grandpa` or `aura`.
-  * By default, either manual or instant seal does not result in block finalization unless the `engine_finalizeBlock` 
-    RPC is executed. However, it is possible to configure the finalization of sealed blocks to occur after a certain 
-    amount of time by setting the `--finalize-delay-sec` option to a specific value, which specifies the number of seconds 
-    to delay before finalizing the blocks. The default value is 1 second.
-    ```shell
-    ./target/release/substrate-contracts-node --finalize-delay-sec 5
-    ```
-* _If no CLI arguments are passed the node is started in development mode
-  by default._
-* A custom logging filter is applied by default that hides block production noise
-  and prints the contracts debug buffer to the console.
-* _With each start of the node process the chain starts from genesis ‒ so no
-  chain state is retained, all contracts will be lost! If you want to retain
-  chain state you have to supply a `--base-path`._
-* For `pallet_contracts::Config` we increased the allowed contract sizes. This
-  avoids running into `CodeTooLarge` when uploading contracts during development.
-  See the comment in [`runtime/src/lib.rs`](https://github.com/paritytech/substrate-contracts-node/blob/main/runtime/src/lib.rs)
-  for more details.
-
-If you are looking for a node suitable for production see these configurations:
-
-* [Substrate Node Template](https://github.com/paritytech/substrate/tree/master/bin/node-template)
-* [Substrate Cumulus Parachain Template](https://github.com/paritytech/cumulus/tree/master/parachain-template)
-* [Contracts Parachain Configuration for Rococo](https://github.com/paritytech/cumulus/tree/master/parachains/runtimes/contracts/contracts-rococo)
+The Sequential diagram of the second scenario is illustrated as follows:
+1. Bob initiates a transaction on Substrate network.
+2. The transaction is received by all the network peers.
+3. An interoperability smart contract is automatically executed on the nodes that have the authority to validate the transaction.
+4. After validation, the peers forward this message to the corresponding relay service.
+5. The relays then identify reliable relay services that can communicate with Hyperledger Fabric network through the broker.
+6. The relay nodes then send the transaction information to the Hyperledger Fabric peers that are part of the interoperability channel.
+7. The identity of nodes who approved the transaction on Substrate network is approved through certificate provision.
+8. After certificate approval, the peers reach consensus over validating the transaction.
+9. The transaction information is then added to the ledger.
+10. A message is sent back to the Substrate network to acknowledge the transaction was successfully executed.
+11. Finally, the asset is unlocked once the Substrate nodes receive the acknowledgement message.
 
 ## Installation
+### Prerequisites
+1. Hyperledger Fabric
+2. Substrate contracts node
+3. Go and NodeJS programming languages
 
-### Download Binary
+For Deploying the smart contract on Substrate network, you need to install the following packages:
+1. cargo-contract (run cargo install cargo-contract on your Linux machine)
+2. @polkadot/api, @polkadot/types, @polkadot/util, and @polkadot/keyring (run npm install @polkadot/api @polkadot/types @polkadot/util @polkadot/keyring)
+3. express and body-parser (run npm install express body-parser)
 
-The easiest way is to download a binary release from [our releases page](https://github.com/paritytech/substrate-contracts-node/releases)
-and just execute `./substrate-contracts-node`.
+After cloning the repository, you need to build the project. run the following command in the root of the project: <br>
+cargo build --release <br>
+In order to deploy your contract, your substrate node should be up and running. For that, you need to run the following command in substrate-contracts-node directory:
+./target/release/substrate-contracts-node --dev <br>
+In add-two-numbers directory, run the following commands:
+1. cargo contract build
+2. cargo contract instantiate --suri //Alice --constructor new --salt $(date +%s) --execute <br>
+You should be able to see the success response. After confirming the transaction, the smart contract address will be returned. You need to save the address for later use.
+3. (optional) to test that the contract is working, you can run the following command (you don't need to be in the add-two-numbers directory): <br>
+   cargo contract call --contract CONTRACT_ADDRESS --message add --suri //Alice --args 2 4 --gas 100000
+The result (6) should be returned.
 
-### Build Locally
+## Code modification
+Before running the experiment, you need to config the substrate_gateway/main.js file:
+1. Path for the metadata should be changed accordingly. It should refer to the JSON metadata of your contract.
+2. Replace the smart contract address with your contract address.
+## Experiments
+inside the fabric_gateway directory, run the following command: <br>
+go run main.go <br>
+Open another tab in your command line and run the following command inside the substrate_gateway directory:
+node main.js
+Open another tab and run the following command: <br>
+curl -X POST http://localhost:4000/invoke     -H "Content-Type: application/json"     -d '{
+"functionName": "add",
+"suri": "//Alice",
+"args": [2, 4],
+"gasFee": "100000000000"
+}' <br>
+If the request is successfully responded, you should be able to see the result (6).
 
-Follow the [official installation steps](https://docs.substrate.io/install/) to set up all Substrate prerequisites.
 
-Afterwards you can install this node via
 
-```bash
-cargo install contracts-node
-```
 
-## Usage
-
-To run a local dev node execute
-
-```bash
-substrate-contracts-node
-```
-
-A new chain in temporary directory will be created each time the command is executed. This is the
-default for this node. If you want to persist chain state across runs you need to
-specify a directory with `--base-path`.
-
-See our FAQ for more details:
-[How do I print something to the console from the runtime?](https://paritytech.github.io/ink-docs/faq/#how-do-i-print-something-to-the-console-from-the-runtime).
-
-## Connect with frontend
-
-Once the node template is running locally, you can connect to it with frontends like [Contracts UI](https://contracts-ui.substrate.io/#/?rpc=ws://127.0.0.1:9944) or [Polkadot-JS Apps](https://polkadot.js.org/apps/#/explorer?rpc=ws://localhost:9944) and interact with your chain.
-
-## How to upgrade to new Polkadot release
-
-We can have two types of releases:
-
-* Internal release: This type of release does not involve releasing the crates on crates.io. It involves using Git
-  references in the Cargo.toml dependencies. We utilize this type of release for faster iteration when we don't want
-  to wait for the substrate crates to be released.
-
-* Crate release: This is the preferable type of release, which involves specifying crate versions in the Cargo.toml
-  dependencies and releasing the crates on crates.io..
-
-- [ ] Check Substrate's [`solochain-template`](https://github.com/paritytech/polkadot-sdk/tree/master/templates/solochain),
-      for new commits between the new polkadot release branch and the one this repository is currently synced with.
-      The current branch is mentioned in the last release.
-- [ ] Apply each commit that happened in this `solochain-template` folder since the last sync.
-- [ ] Check [`parachain-template`](https://github.com/paritytech/polkadot-sdk/tree/master/templates/parachain)
-      and apply each commit that has occurred in its folder since the last sync.
-- [ ] Check commits for [`pallet-contracts`](https://github.com/paritytech/polkadot-sdk/tree/master/substrate/frame/contracts)
-      since the last time someone synchronized this repository with Substrate
-      in order to not miss any important changes.
-- [ ] (Crate release only) Execute `psvm -p ./Cargo.toml -v X.X.X`, to update the dependencies to the required versions.
-      Replace `X.X.X` with the requested Polkadot release version.
-- [ ] (Internal release only)  Manually update the dependencies in Cargo.toml to the required Git SHA versions.
-- [ ] Increment the minor version number in `Cargo.toml` and `node/Cargo.toml`.
-- [ ] Execute `cargo run --release`. If successful, it should produce blocks
-      and a new, up to date, `Cargo.lock` will be created.
-- [ ] Create a PR with the changes, have it reviewed.
-- [ ] (Crate release only) Upload crates to `crates.io` using the commands below, replacing `XX` with your incremented
-      version number:
-      `cargo release 0.XX.0 -v --no-tag --no-push -p contracts-node-runtime -p contracts-parachain-runtime --execute`
-      `cargo release 0.XX.0 -v --no-tag --no-push -p contracts-node --execute`
-      Note: Before uploading, perform a dry run to ensure that it will be successful.
-- [ ] Merge the release PR branch.
-- [ ] Replace `XX` in this command with your incremented version number and execute it:
-      `git checkout main && git pull && git tag v0.XX.0 && git push origin v0.XX.0`.
-      This will push a new tag with the version number to this repository.
-- [ ] We have set this repository up in a way that tags à la `vX.X.X` trigger
-      a CI run that creates a GitHub draft release. You can observe CI runs on
-      [GitLab](https://gitlab.parity.io/parity/mirrors/substrate-contracts-node/-/pipelines).
-      This draft release will contain a binary for Linux and Mac and appear
-      under [Releases](https://github.com/paritytech/substrate-contracts-node/releases).
-      Add a description in the style of "Synchronized with [`polkadot-v1.8.0`](https://github.com/paritytech/polkadot-sdk/tree/release-polkadot-v1.8.0) branch."
-      and publish it.
