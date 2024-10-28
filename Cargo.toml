@@ -12,7 +12,7 @@ members = [
 	"node",
 	"runtime",
 	"parachain-runtime",
-	"add_two_numbers",
+	"substrate_sc",
 ]
 
 [profile.release]
