@@ -5,27 +5,29 @@ const crypto = require('crypto');
 const { ApiPromise, WsProvider, Keyring } = require('@polkadot/api');
 const { ContractPromise } = require('@polkadot/api-contract');
 const BN = require('bn.js');
-const path = require('path');
 const { Gateway, Wallets } = require('fabric-network');
-
+const path = require('path');
 const app = express();
 app.use(express.json());
 
 // Load SSL/TLS certificates for server-side SSL
 const options = {
-    key: fs.readFileSync('../certs/server-4-key.pem'),
-    cert: fs.readFileSync('../certs/server-4-cert.pem'),
-    ca: fs.readFileSync('../certs/ca-cert.pem'),
+    key: fs.readFileSync('../../certs/server-1-key.pem'),
+    cert: fs.readFileSync('../../certs/server-1-cert.pem'),
+    ca: fs.readFileSync('../../certs/ca-cert.pem'),
     requestCert: true,
     rejectUnauthorized: false // For self-signed certificates in development; set to `true` in production
 };
 
 // Load server's RSA private key
-const serverPrivateKey = fs.readFileSync('../keys/server-4-private-key.pem', 'utf8');
+const serverPrivateKey = fs.readFileSync('../../keys/server-1-private-key.pem', 'utf8');
 
-// Decrypt AES key using RSA private key
+// Load server's signing private key (adjusted for signing purposes)
+const serverSigningPrivateKey = fs.readFileSync('/home/saeed/Desktop/substrate-contracts-node/signing-keys/server-1-private-key.pem', 'utf8');
+
+// Decrypt AES key using the server's private RSA key
 function decryptRSA(encryptedKey) {
-    const buffer = Buffer.from(encryptedKey, 'base64');
+    const buffer = Buffer.from(encryptedKey, 'base64'); // Ensure base64 decoding
     return crypto.privateDecrypt(serverPrivateKey, buffer);
 }
 
@@ -37,27 +39,27 @@ function decryptAES(encryptedData, key) {
     return decrypted;
 }
 
-// Substrate contract call
+// Sign the response with the server's private signing key
+function signResponse(data) {
+    const sign = crypto.createSign('SHA256');
+    sign.update(data);
+    sign.end();
+    return sign.sign(serverSigningPrivateKey, 'base64');
+}
+
+// Substrate contract call (same as before)
 async function callSubstrateContract(functionName, userSURI, args, gasFee) {
-    // Connect to the Substrate node
     const provider = new WsProvider('ws://127.0.0.1:9944');
-
     const api = await ApiPromise.create({ provider });
-
-    // Load the contract's metadata (from the contract's compiled JSON file)
-    const contractMetadata = require('/home/saeed/Desktop/substrate-contracts-node/target/ink/substrate_sc/substrate_sc.json'); // Path to the metadata file
-    const contractAddress = '5FtrVvkbdd3fmfpnFukDMXtKzGQRHmA5cnZLMps3HWn8Ma3C'; // Replace with your contract address
-
-    // Create the contract object
+    const contractMetadata = require('/home/saeed/Desktop/substrate-contracts-node/target/ink/substrate_sc/substrate_sc.json');
+    const contractAddress = '5GxvYW3Q1gemKscDqJQLPFVDTNRj33Sec4KbCgyvzoXwvrho';
     const contract = new ContractPromise(api, contractMetadata, contractAddress);
-
-    // Create a keyring instance and add the user's keypair
     const keyring = new Keyring({ type: 'sr25519' });
-    const user = keyring.addFromUri(userSURI); // This will use the user's SURI (e.g., "//Alice")
+    const user = keyring.addFromUri(userSURI);
 
     const gasLimit = api.registry.createType('WeightV2', {
-        refTime: new BN('1000000000000'), // Increase refTime
-        proofSize: new BN('100000000000')  // Keep proofSize as it is
+        refTime: new BN('1000000000000'),
+        proofSize: new BN('100000000000')
     });
 
     const result = await contract.query[functionName](
@@ -65,30 +67,27 @@ async function callSubstrateContract(functionName, userSURI, args, gasFee) {
         { gasLimit },
         ...args
     );
-    
 
-    // Check if the result contains an error
     if (result.result.isErr) {
         throw new Error(`Smart contract call failed: ${result.result.asErr.toString()}`);
     }
 
-    // Return the actual output from the contract call
-    const output = result.output.toJSON(); // Convert the output to JSON
-    return output;
+    return result.output.toJSON();
 }
 
-
+// Fabric chaincode invocation (same as before)
 async function invokeFabricChaincode(functionName, args, userSURI) {
     try {
         const ccpPath = '/home/saeed/Desktop/substrate-contracts-node/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/connection-org1.json';
         const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
-        const walletPath = path.join(process.cwd(), '../enroll_admin/wallet');
+        const walletPath = path.join(process.cwd(), '../../enroll_admin/wallet');
         const wallet = await Wallets.newFileSystemWallet(walletPath);
         const identity = await wallet.get(userSURI);
+
         if (!identity) {
             console.log(`An identity for the user "${userSURI}" does not exist in the wallet`);
-            return null;  // Return null if identity doesn't exist
+            return null;
         }
 
         const gateway = new Gateway();
@@ -96,32 +95,25 @@ async function invokeFabricChaincode(functionName, args, userSURI) {
 
         const network = await gateway.getNetwork('mychannel');
         const contract = network.getContract('fabric_cc');
-
-        // Submit the specified transaction
-        const result = await contract.submitTransaction(functionName, ...args); // Spread operator for args
-        console.log(`Transaction has been submitted, result is: ${result.toString()}`);
-
-        // Disconnect from the gateway
+        const result = await contract.submitTransaction(functionName, ...args);
         await gateway.disconnect();
 
-        return result.toString();  // Return the result as a string
+        return result.toString();
     } catch (error) {
         console.error(`Failed to submit transaction: ${error}`);
-        throw error;  // Rethrow the error to handle it in the calling function
+        throw error;
     }
 }
-
 
 app.post('/invoke-smart-contract', async (req, res) => {
     try {
         const { encryptedAESKeyBase64, encryptedPayloadBase64 } = req.body;
 
         if (!encryptedAESKeyBase64 || !encryptedPayloadBase64) {
-            console.error('Missing encrypted data fields in request body');
             return res.status(400).send({ message: 'Invalid request: Missing encrypted data fields.' });
         }
 
-        const aesKey = decryptRSA(encryptedAESKeyBase64, serverPrivateKey);
+        const aesKey = decryptRSA(encryptedAESKeyBase64);
         const payload = JSON.parse(decryptAES(encryptedPayloadBase64, aesKey));
         const { ignore, functionName, userSURI, args, network } = payload;
 
@@ -129,27 +121,30 @@ app.post('/invoke-smart-contract', async (req, res) => {
             return res.send({ message: 'Request ignored.' });
         }
 
+        let result;
         if (network === 'fabric') {
-            const fabricResult = await invokeFabricChaincode(functionName, args, userSURI);
-            return res.send({ message: 'Fabric chaincode invoked.', result: fabricResult });
+            result = await invokeFabricChaincode(functionName, args, userSURI);
         } else if (network === 'substrate') {
-            const substrateResult = await callSubstrateContract(functionName, userSURI, args);
-            return res.send({ message: 'Substrate smart contract invoked.', result: substrateResult });
+            result = await callSubstrateContract(functionName, userSURI, args);
         } else {
             return res.status(400).send({ message: 'Invalid network specified.' });
         }
 
+        const signature = signResponse(JSON.stringify(result));
+
+        return res.send({
+            message: 'Smart contract invoked.',
+            result,
+            signature // Include the signature in the response
+        });
+
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
-
 // Start the HTTPS server with SSL/TLS
-https.createServer(options, app).listen(3004, () => {
-    console.log('Server is listening on port 3004 with SSL');
+https.createServer(options, app).listen(3001, () => {
+    console.log('Server is listening on port 3000 with SSL');
 });
